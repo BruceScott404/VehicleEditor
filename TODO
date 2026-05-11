@@ -1,0 +1,3 @@
+> Add some sort of delimiter to end of all vehicles to tell program where the disclaimer is for removal
+> Add removal of text after delimiter before adding new disclaimers
+> Allow for simply removing disclaimers with replacement
