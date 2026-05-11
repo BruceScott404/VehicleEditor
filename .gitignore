@@ -1,0 +1,7 @@
+venv
+build
+dist
+*.cfg
+commands
+Vehicle Automator.spec
+.DS_Store
