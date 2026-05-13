@@ -164,7 +164,7 @@ class App(ctk.CTk):
 
         add_text = self.get_text_add()
 
-        # Insert some text
+        # Insert the add text into the text preview
         self.add_text_preview.insert("1.0", add_text)
 
         # Make it read-only
