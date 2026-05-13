@@ -155,7 +155,7 @@ class App(ctk.CTk):
             text="Edit",
             command=self.on_add_text_edit_button_click
         )
-        self.add_text_edit_button.pack()
+        self.add_text_edit_button.pack(pady=10)
 
         self.add_text_preview = ctk.CTkTextbox(
             frame
