@@ -1,4 +1,5 @@
 import re
+import subprocess
 import threading
 import customtkinter as ctk
 from playwright.sync_api import Playwright, sync_playwright, expect
@@ -742,6 +743,16 @@ class App(ctk.CTk):
         browser.close()
 
 if __name__ == "__main__":
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            browser.close()
+    except Exception:
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            check=True
+        )
+
     ctk.set_appearance_mode("System")
     ctk.set_default_color_theme(resource_path("resources/theme_data.json"))
 
