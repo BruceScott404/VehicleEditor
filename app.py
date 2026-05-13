@@ -81,6 +81,12 @@ TEXT_ADD_FILE=app_path("text_add.cfg")
 MAKES_FILE=app_path("makes.cfg")
 TYPES_FILE=app_path("types.cfg")
 
+ADD_TAB_NAME = "Disclaimer Add"
+REMOVE_TAB_NAME = "Disclaimer Removal"
+
+ADD_ACTION_NAME = "add"
+REMOVE_ACTION_NAME = "remove"
+
 DEFAULT_MAKES = [
     "ALUMACRAFT",
     "Can-Am",
@@ -109,8 +115,8 @@ class App(ctk.CTk):
 
         # Window settings
         self.title("Vehicle Automator")
-        self.geometry("600x400")
-        self.minsize(600, 800)
+        self.geometry("600x900")
+        self.minsize(600, 900)
 
         self.header = ctk.CTkFrame(
             self,
@@ -172,30 +178,41 @@ class App(ctk.CTk):
             command=self.on_make_or_type_edited
         )
         self.type_entry.pack(pady=20)
-        self.type_entry.set("Select Type")
-        self.make_entry.set("Select Make")
+        self.type_entry.set("ATV")
+        self.make_entry.set("Can-Am")
 
-        add_text_title_frame = ctk.CTkFrame(
-            frame
+        self.tab_view = ctk.CTkTabview(
+            frame,
+            width=350
         )
-        add_text_title_frame.pack(expand=True,pady=10)
+        self.tab_view.pack()
+
+        self.tab_view.add(ADD_TAB_NAME)
+        self.tab_view.add(REMOVE_TAB_NAME)
+
+        #region Disclaimer Add Elements
+
+        self.add_text_title_frame = ctk.CTkFrame(
+            self.tab_view.tab(ADD_TAB_NAME)
+        )
+        self.add_text_title_frame.pack(expand=True,pady=10)
 
         self.add_text_label = ctk.CTkLabel(
-            add_text_title_frame,
+            self.add_text_title_frame,
             text="Disclaimer text to add",
             font=("Arial", 18, "bold")
         )
         self.add_text_label.pack(pady=10, padx=10)
 
         self.add_text_edit_button = ctk.CTkButton(
-            add_text_title_frame,
+            self.add_text_title_frame,
             text="Edit",
             command=self.on_add_text_edit_button_click
         )
         self.add_text_edit_button.pack(pady=10)
 
         self.add_text_preview = ctk.CTkTextbox(
-            frame
+            self.tab_view.tab(ADD_TAB_NAME)
         )
         self.add_text_preview.pack(pady=10, fill="both", expand=True)
 
@@ -207,6 +224,43 @@ class App(ctk.CTk):
         # Make it read-only
         self.add_text_preview.configure(state="disabled")
 
+        #endregion
+
+
+        #region Disclaimer Removal Elements
+
+        self.delimiter_label = ctk.CTkLabel(
+            self.tab_view.tab(REMOVE_TAB_NAME),
+            text="Delimiter"
+        )
+        self.delimiter_label.pack()
+
+        self.delimiter_entry = ctk.CTkEntry(
+            self.tab_view.tab(REMOVE_TAB_NAME),
+            width=300,
+            placeholder_text="Delimiter E.G. ```"
+        )
+        self.delimiter_entry.pack(pady=10)
+        self.delimiter_entry.insert(0,"```")
+
+        self.keep_delimiter_label = ctk.CTkLabel(
+            self.tab_view.tab(REMOVE_TAB_NAME),
+            text="Keep Delimiter?"
+        )
+        self.keep_delimiter_label.pack()
+
+        self.keep_del = ctk.StringVar(value="none")
+
+        # Radio buttons
+        self.yes_radio = ctk.CTkRadioButton(self.tab_view.tab(REMOVE_TAB_NAME), text="Yes", variable=self.keep_del, value="yes")
+        self.yes_radio.pack()
+        self.yes_radio.select()
+
+        self.no_radio = ctk.CTkRadioButton(self.tab_view.tab(REMOVE_TAB_NAME), text="No", variable=self.keep_del, value="no")
+        self.no_radio.pack()
+
+        #endregion
+
         # Run button
         self.run_button = ctk.CTkButton(
             frame,
@@ -217,7 +271,6 @@ class App(ctk.CTk):
         )
         self.run_button.pack(pady=25)
 
-        self.run_button.configure(state="disabled")
         if not makes:
             self.set_status("Please add some makes...")
         if not types:
@@ -287,10 +340,17 @@ class App(ctk.CTk):
             text=f"Running automation for {make} {vehicle_type}..."
         )
 
+        current_action = ADD_ACTION_NAME
+        current_tab = self.tab_view.get()
+        if current_tab == REMOVE_TAB_NAME:
+            current_action = REMOVE_ACTION_NAME
+
+        #if self.tab_view.getSelection() == REMOVE_TAB_NAME
+
         # Run automation in a background thread so UI stays responsive
         thread = threading.Thread(
             target=self.run_automation_thread,
-            args=(make, vehicle_type),
+            args=(make, vehicle_type,current_action),
             daemon=True
         )
         thread.start()
@@ -469,10 +529,61 @@ class App(ctk.CTk):
         self.wait_window(popup)
 
 
-    def run_automation_thread(self, make, vehicle_type):
+    def playwright_login(self, playwright):
+        login_info = self.get_login_info()
+        if login_info == None:
+            raise Exception("Login info not found...")
+        
+        email = login_info[0]
+        password = login_info[1]
+
+        add_text = self.get_text_add()
+
+        if add_text == "":
+            raise Exception("Please add some text to add...")
+
+        print("Text loaded: \n```")
+        print(add_text)
+        print("```")
+
+        self.set_status("Opening browser...")
+
+        browser = playwright.chromium.launch(headless=False)
+        context = browser.new_context()
+        page = context.new_page()
+        page.goto("https://www.powergo.ca/en/client-login/")
+        with page.expect_popup() as page1_info:
+            page.get_by_role("link", name="Access my account").first.click()
+        page1 = page1_info.value
+
+        page1.get_by_role("textbox", name="* Email").click()
+        page1.get_by_role("textbox", name="* Email").fill(email)
+        page1.get_by_role("textbox", name="* Email").press("Tab")
+        page1.get_by_role("textbox", name="* Password").fill(password)
+        page1.get_by_role("button", name="Login").click()
+
+        page1.wait_for_load_state("networkidle")
+
+        try:
+            page1.get_by_text(
+                "Invalid email address and/or password.",
+                exact=True
+            ).wait_for(timeout=3000)
+
+            raise ValueError("Login failed: invalid email address and/or password.")
+
+        except PlaywrightTimeoutError:
+            pass
+
+        return page1
+
+
+    def run_automation_thread(self, make, vehicle_type, action):
         try:
             with sync_playwright() as playwright:
-                self.run(playwright, make, vehicle_type)
+                page1 = self.playwright_login(playwright)
+                links = self.gather_vehicle_links(page1, make, vehicle_type)
+                self.run(playwright, links, page1, action)
 
             self.set_status("Automation complete.")
         except Exception as e:
@@ -545,55 +656,23 @@ class App(ctk.CTk):
             password = lines[1].strip()
             return (email,password)
 
-    def run(self, playwright: Playwright, selected_make, selected_type) -> None:
 
+    def run_removal_script(self, page1, splitter:str, keep_splitter:bool):
+        print(f"Splitter: {splitter}\nKeep: {keep_splitter}")
+        page1.pause()
+        # page1.evaluate("""
+        # () => {
+        #     const editor = window.tinymce?.activeEditor;
+        #     if (!editor) return;
+
+        #     editor.setContent(editor.getContent() + " testTEXT");
+        # }
+        # """)
+
+
+    def gather_vehicle_links(self, page1, selected_make, selected_type):
         selected_make = selected_make.lower()
         selected_type = selected_type.lower()
-
-        login_info = self.get_login_info()
-        if login_info == None:
-            raise Exception("Login info not found...")
-        
-        email = login_info[0]
-        password = login_info[1]
-
-        add_text = self.get_text_add()
-
-        if add_text == "":
-            raise Exception("Please add some text to add...")
-
-        print("Text loaded: \n```")
-        print(add_text)
-        print("```")
-
-        self.set_status("Opening browser...")
-
-        browser = playwright.chromium.launch(headless=False)
-        context = browser.new_context()
-        page = context.new_page()
-        page.goto("https://www.powergo.ca/en/client-login/")
-        with page.expect_popup() as page1_info:
-            page.get_by_role("link", name="Access my account").first.click()
-        page1 = page1_info.value
-
-        page1.get_by_role("textbox", name="* Email").click()
-        page1.get_by_role("textbox", name="* Email").fill(email)
-        page1.get_by_role("textbox", name="* Email").press("Tab")
-        page1.get_by_role("textbox", name="* Password").fill(password)
-        page1.get_by_role("button", name="Login").click()
-
-        page1.wait_for_load_state("networkidle")
-
-        try:
-            page1.get_by_text(
-                "Invalid email address and/or password.",
-                exact=True
-            ).wait_for(timeout=3000)
-
-            raise ValueError("Login failed: invalid email address and/or password.")
-
-        except PlaywrightTimeoutError:
-            pass
 
         page1.get_by_text("Show more filters ", exact=True).click()
 
@@ -668,8 +747,6 @@ class App(ctk.CTk):
 
         page1.wait_for_selector("td.stock-num-column a")
 
-        page1.pause()
-
         all_links_scraped = False
         links = []
         prev_last = None
@@ -723,57 +800,69 @@ class App(ctk.CTk):
             self.set_status(f"{curr}: {l}")      
 
         self.set_status(f"Loaded {len(links)} vehicles...")
+        return links
+
+
+    def run(self, playwright: Playwright, links, page1, action) -> None:
 
         total = 0
 
         for i, item in enumerate(links):
             total += 1
-            if total > 10000:
+            if total > 100000:
                     return
             self.set_status(f"{i + 1}/{len(links)} - Opening {item['stock']}")
 
             page1.goto(item["href"])
             page1.wait_for_load_state("networkidle")
-            editor = page1.locator('iframe[title="Rich Text Area"]').content_frame.get_by_label(
-                "Rich Text Area. Press ALT-0"
-            )
 
-            current_text = editor.evaluate("""
-            el => el.innerText
-            """)
+            print(action)
 
-            normalized_current = "".join(current_text.split()).lower()
-            normalized_add = "".join(add_text.split()).lower()
+            if action == ADD_ACTION_NAME:
+                print("On add")
+                page1.pause()
+                editor = page1.locator('iframe[title="Rich Text Area"]').content_frame.get_by_label(
+                    "Rich Text Area. Press ALT-0"
+                )
 
-            # Check if text already exists
-            if normalized_add in normalized_current:
-                self.set_status("Text already present, skipping.")
-                continue
+                current_text = editor.evaluate("""
+                el => el.innerText
+                """)
 
-            # Click into editor
-            editor.click()
+                normalized_current = "".join(current_text.split()).lower()
+                normalized_add = "".join(add_text.split()).lower()
 
-            editor.evaluate(f"""
-            (el) => {{
-                el.focus();
-                const range = document.createRange();
-                range.selectNodeContents(el);
-                range.collapse(false);
+                # Check if text already exists
+                if normalized_add in normalized_current:
+                    self.set_status("Text already present, skipping.")
+                    continue
 
-                const sel = window.getSelection();
-                sel.removeAllRanges();
-                sel.addRange(range);
-            }}
-            """)
+                # Click into editor
+                editor.click()
 
-            editor.press("Enter")
-            editor.press("Enter")
+                editor.evaluate(f"""
+                (el) => {{
+                    el.focus();
+                    const range = document.createRange();
+                    range.selectNodeContents(el);
+                    range.collapse(false);
 
-            editor.type(add_text)
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                }}
+                """)
 
-            page1.get_by_role("button", name="Save").click()
-            page1.wait_for_load_state("networkidle")
-            self.set_status("text added")
+                editor.press("Enter")
+                editor.press("Enter")
+
+                editor.type(add_text)
+
+                page1.get_by_role("button", name="Save").click()
+                page1.wait_for_load_state("networkidle")
+                self.set_status("text added")
+            elif action == REMOVE_ACTION_NAME:
+                self.run_removal_script(page1, self.delimiter_entry.get(), self.keep_del.get()=="yes")
         # ---------------------
         context.close()
         browser.close()
