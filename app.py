@@ -2,24 +2,62 @@ import re
 import subprocess
 import threading
 import customtkinter as ctk
-from playwright.sync_api import Playwright, sync_playwright, expect
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+from pathlib import Path
 from PIL import Image
 import time
 import os
 import sys
 
+
+if getattr(sys, "frozen", False):
+    base = Path(sys._MEIPASS)
+else:
+    base = Path(__file__).parent
+
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(base / "pw-browsers")
+
+from playwright.sync_api import Playwright, sync_playwright, expect
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
 def resource_path(relative_path):
+    """
+    Get absolute path to resource for both:
+    - macOS (.app bundle)
+    - Windows (.exe)
+    """
+
+    # Running as PyInstaller bundle
     if getattr(sys, "frozen", False):
-        # macOS .app resources location
+
+        # macOS
         if sys.platform == "darwin":
-            base_path = os.path.join(
-                os.path.dirname(sys.executable),
-                "..",
-                "Resources"
+            base_path = getattr(
+                sys,
+                "_MEIPASS",
+                os.path.join(
+                    os.path.dirname(sys.executable),
+                    "..",
+                    "Resources"
+                )
             )
+
+        # Windows
+        elif sys.platform == "win32":
+            base_path = getattr(
+                sys,
+                "_MEIPASS",
+                os.path.dirname(sys.executable)
+            )
+
+        # Fallback for Linux/other systems
         else:
-            base_path = os.path.dirname(sys.executable)
+            base_path = getattr(
+                sys,
+                "_MEIPASS",
+                os.path.dirname(sys.executable)
+            )
+
+    # Running in normal Python environment
     else:
         base_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -68,8 +106,6 @@ DEFAULT_TYPES = [
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-
-        print(LOGIN_INFO_FILE)
 
         # Window settings
         self.title("Vehicle Automator")
@@ -743,15 +779,7 @@ class App(ctk.CTk):
         browser.close()
 
 if __name__ == "__main__":
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            browser.close()
-    except Exception:
-        subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
-            check=True
-        )
+    
 
     ctk.set_appearance_mode("System")
     ctk.set_default_color_theme(resource_path("resources/theme_data.json"))
